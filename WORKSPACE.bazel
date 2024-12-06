@@ -1,0 +1,77 @@
+workspace(name = "github_com_nurovic_grps_go")
+
+# Sürüm ve checksum değerlerini dışarıdan alıyoruz.
+load("//:versions.bzl",
+    "GAZELLE_SHA256",
+    "GAZELLE_VERSION",
+    "GO_VERSION",
+    "PROTOC_GEN_VALIDATE_VERSION",
+    "PROTO_VERSION",
+    "RULES_GO_SHA256",
+    "RULES_GO_VERSION",
+)
+
+# Bazel araçları ve gereksinimleri
+load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+load("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")
+
+# RULES_GO - Go kuralları
+http_archive(
+    name = "io_bazel_rules_go",
+    sha256 = RULES_GO_SHA256,
+    urls = [
+        "https://mirror.bazel.build/github.com/bazelbuild/rules_go/releases/download/%s/rules_go-%s.zip" % (RULES_GO_VERSION, RULES_GO_VERSION),
+        "https://github.com/bazelbuild/rules_go/releases/download/%s/rules_go-%s.zip" % (RULES_GO_VERSION, RULES_GO_VERSION),
+    ],
+)
+
+# Gazelle - Bazel ile Go modüllerini otomatik olarak yapılandıran araç
+http_archive(
+    name = "bazel_gazelle",
+    sha256 = GAZELLE_SHA256,
+    urls = [
+        "https://mirror.bazel.build/github.com/bazelbuild/bazel-gazelle/releases/download/%s/bazel-gazelle-%s.tar.gz" % (GAZELLE_VERSION, GAZELLE_VERSION),
+        "https://github.com/bazelbuild/bazel-gazelle/releases/download/%s/bazel-gazelle-%s.tar.gz" % (GAZELLE_VERSION, GAZELLE_VERSION),
+    ],
+)
+
+# Go bağımlılıklarını ve kurallarını yükleme
+load("@io_bazel_rules_go//go:deps.bzl", "go_register_toolchains", "go_rules_dependencies")
+load("@bazel_gazelle//:deps.bzl", "gazelle_dependencies")
+load("//:deps.bzl", "go_dependencies")
+
+# Bağımlılıkları işleme
+go_dependencies()
+go_rules_dependencies()
+
+# Go için toolchain kaydını yapma
+go_register_toolchains(version = GO_VERSION)
+
+# Gazelle'in bağımlılıklarını yükleme
+gazelle_dependencies(go_repository_default_config = "//:WORKSPACE.bazel")
+
+# Protobuf - Google Protobuf bağımlılıkları
+git_repository(
+    name = "com_google_protobuf",
+    remote = "https://github.com/protocolbuffers/protobuf",
+    tag = PROTO_VERSION,
+)
+
+load("@com_google_protobuf//:protobuf_deps.bzl", "protobuf_deps")
+
+protobuf_deps()
+
+# protoc-gen-validate - Validasyon araçları
+git_repository(
+    name = "com_envoyproxy_protoc_gen_validate",
+    remote = "https://github.com/bufbuild/protoc-gen-validate",
+    tag = PROTOC_GEN_VALIDATE_VERSION,
+)
+
+load("@com_envoyproxy_protoc_gen_validate//bazel:repositories.bzl", "pgv_dependencies")
+load("@com_envoyproxy_protoc_gen_validate//:dependencies.bzl", "go_third_party")
+
+pgv_dependencies()
+
+# Go üçün üçüncü taraf bağımlılıkları yükleme
+go_third_party()
