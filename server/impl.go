@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"io"
 	"time"
 
 	pb "github.com/nurovic/gRPC_Go/proto/todo/v1"
@@ -24,3 +25,31 @@ func (s *server) ListTasks(req *pb.ListTasksRequest, stream pb.TodoService_ListT
 	  })
   return err })
   }
+
+  func (s *server) UpdateTasks(stream pb.TodoService_UpdateTasksServer) error {
+	for {
+	  req, err := stream.Recv()
+	  if err == io.EOF {
+		return stream.SendAndClose(&pb.UpdateTasksResponse{})
+	  }
+	  if err != nil {
+		return err
+	  }
+	  s.d.updateTask(
+		req.Task.Id,
+		req.Task.Description,
+		req.Task.DueDate.AsTime(),
+		req.Task.Done,
+  ) }
+  }
+  func (s *server) DeleteTasks(stream pb.TodoService_DeleteTasksServer) error {
+	for {
+	  req, err := stream.Recv()
+	  if err == io.EOF {
+  return nil }
+	  if err != nil {
+		return err
+	  }
+	  s.d.deleteTask(req.Id)
+	  stream.Send(&pb.DeleteTasksResponse{})
+  } }

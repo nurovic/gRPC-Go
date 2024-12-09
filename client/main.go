@@ -46,7 +46,65 @@ func printTasks(c pb.TodoServiceClient) {
 		 res.Overdue)
 	}
   }
-  
+
+  func updateTasks(c pb.TodoServiceClient, reqs ...*pb.UpdateTasksRequest) {
+	  stream, err := c.UpdateTasks(context.Background())
+	  if err != nil {
+		log.Fatalf("unexpected error: %v", err)
+	  }
+	  for _, req := range reqs {
+		err := stream.Send(req)
+		if err != nil {
+	return }
+		if err != nil {
+		  log.Fatalf("unexpected error: %v", err)
+		}
+		if req.Task != nil {
+		  fmt.Printf("updated task with id: %d\n", req.Task.Id)
+		}
+	  }
+	  if _, err = stream.CloseAndRecv(); err != nil {
+		log.Fatalf("unexpected error: %v", err)
+	  }
+	}
+
+	func deleteTasks(c pb.TodoServiceClient, reqs ...*pb.DeleteTasksRequest) {
+		stream, err := c.DeleteTasks(context.Background())
+	
+		if err != nil {
+			log.Fatalf("unexpected error: %v", err)
+		}
+	
+		waitc := make(chan struct{})
+	
+		go func() {
+			for {
+				_, err := stream.Recv()
+	
+				if err == io.EOF {
+					close(waitc)
+					break
+				}
+				if err != nil {
+					log.Fatalf("error while receiving: %v\n", err)
+				}
+	
+				log.Println("deleted tasks")
+			}
+		}()
+	
+		for _, req := range reqs {
+			if err := stream.Send(req); err != nil {
+				return
+			}
+		}
+		if err := stream.CloseSend(); err != nil {
+			return
+		}
+	
+		<-waitc
+	}
+	
   func main() {
 	args := os.Args[1:]
 	if len(args) == 0 {
@@ -61,19 +119,45 @@ func printTasks(c pb.TodoServiceClient) {
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
+
+
+	defer func(conn *grpc.ClientConn) {
+		if err := conn.Close(); err != nil {
+		  log.Fatalf("unexpected error: %v", err)
+		}
+	}(conn)
+
 	c := pb.NewTodoServiceClient(conn)
 	fmt.Println("--------ADD--------")
 	dueDate := time.Now().Add(5 * time.Second)
 	id1 := addTask(c, "This is a task", dueDate)
-	fmt.Println("-------------------",id1)
+	id2 := addTask(c, "This is another task", dueDate)
+	id3 := addTask(c, "And yet another task", dueDate)
+	id4 := addTask(c, "THE WHALL", dueDate)
+	fmt.Println("-------------------",id4)
+
+	fmt.Println("--------LIST-------")
+	printTasks(c)
 	fmt.Println("-------------------")
-	fmt.Println("--------LIST-------") 
-	printTasks(c) 
+
+	fmt.Println("-------UPDATE------")
+	updateTasks(c, []*pb.UpdateTasksRequest{
+		{Task: &pb.Task{Id: id1, Description: "A better name for the task"}},
+		{Task: &pb.Task{Id: id2, DueDate: timestamppb.New(dueDate.Add(5 * time.Hour))}},
+		{Task: &pb.Task{Id: id3, Done: true}},
+	}...)
+	printTasks(c)
+	fmt.Println("-------------------")
+
+	fmt.Println("-------DELETE------")
+	deleteTasks(c, []*pb.DeleteTasksRequest{
+		{Id: id1},
+		{Id: id2},
+		{Id: id3},
+	}...)
+
+	printTasks(c)
 	fmt.Println("-------------------")
 
 
-	defer func(conn *grpc.ClientConn) {
-	  if err := conn.Close(); err != nil {
-		log.Fatalf("unexpected error: %v", err)
-	  }
-  }(conn) }
+}
